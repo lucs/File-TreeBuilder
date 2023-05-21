@@ -1,0 +1,212 @@
+use Test;
+use Test::Selector;
+use File::Temp;
+use File::TreeBuilder;
+
+# --------------------------------------------------------------------
+sub bad-Node (Str $text) {
+    my $node;
+    throws-like(
+        { $node = Node.from-text($text) },
+        NodeX::MalformedLine,
+    ) or dd $node;
+}
+
+t bd1 => { bad-Node "foo" }
+t bd2 => { bad-Node "." }
+t bd3 => { bad-Node "o foo" }
+t bd4 => { bad-Node ' /xx foo' }
+t bd5 => { bad-Node "/ dir foo" }
+t bd6 => { bad-Node ". file ." }
+t bd7 => { bad-Node "   . file ." }
+t bd8 => { bad-Node ". file x foo" }
+
+# --------------------------------------------------------------------
+sub good-Node_desc (
+    Str  $text,
+    Int  $exp_lead-ws,
+    Str  $exp_name,
+    Str  $exp_text = '_',
+    Str  $exp_key = '_',
+    Str  $exp_perms = '_',
+) {
+    my $N = Node.from-text($text);
+    is($N.lead-ws, $exp_lead-ws, "Expecting correct whitespace length '$exp_lead-ws'.");
+    is($N.name, $exp_name, "Expecting correct node name '$exp_name'.");
+    $exp_text ne '_' && is($N.text, $exp_text, "Expecting correct text '$exp_text'.");
+    $exp_key ne '_' && is($N.key, $exp_key, "Expecting correct key '$exp_key'.");
+    $exp_perms ne '_' && is($N.perms, $exp_perms, "Expecting correct perms '$exp_perms'.");
+}
+
+t gd1 => { good-Node_desc | « '  . foo'      2 foo »}
+t gd2 => { good-Node_desc | « '. foo'        0 foo »}
+t gd3 => { good-Node_desc | « '  / foo'      2 foo »}
+t gd4 => { good-Node_desc | « '/o fob'       0 'f b' »}
+t gd5 => { good-Node_desc | « '/ foo'        0 foo »}
+t gd6 => { good-Node_desc | « '. foo . txt'  0 foo   txt »}
+t gd7 => { good-Node_desc | « '. foo % key'  0 foo   _   key »}
+t gd8 => { good-Node_desc | « '.644 foo'     0 foo   _   _   644 »}
+t gd9 => { good-Node_desc | « '.345_ f_b'    0 'f b' _   _   345 »}
+t gdA => { good-Node_desc | « '.222é féb'    0 'f b' _   _   222 »}
+
+# --------------------------------------------------------------------
+use MONKEY-TYPING;
+augment class File::TreeBuilder {
+    trusts GLOBAL;
+}
+
+sub bad-FileTree (
+    $exp_line-num,
+    $exp_excep,
+    Str $tree-desc,
+    Hash $contents-href?,
+) {
+    my $FTB = File::TreeBuilder.new;
+    throws-like(
+        { $FTB!File::TreeBuilder::build-nodes(
+            $tree-desc,
+            $contents-href,
+        ) },
+        $exp_excep,
+        line-num => $exp_line-num,
+    );
+}
+
+t bf1 => { bad-FileTree(1, NodeX::NoFileDataHash,  ". file % foo") }
+t bf2 => { bad-FileTree(1, NodeX::MissingFileData, ". file % bar", %(qux => "Qux")) }
+
+# --------------------------------------------------------------------
+t bf2a => { bad-FileTree(
+    2,
+    NodeX::MalformedLine,
+    "/ d1\n    . \n    . f2 % bar",
+    %(qux => "Qux"),
+) }
+
+t bf3 => { bad-FileTree(
+    3,
+    NodeX::MissingFileData,
+    "/ d1\n    . f1\n    . f2 % bar",
+    %(qux => "Qux"),
+) }
+
+t bf4 => { bad-FileTree(
+    3,
+    NodeX::InvalidIndent,
+    q:to/EoD/,
+    / d1
+        . f1
+            . f2
+    EoD
+) }
+
+t bf5 => { bad-FileTree(
+    3,
+    NodeX::InvalidIndent,
+    q:to/EoD/,
+    / d1
+            . f1
+        / d2
+    EoD
+) }
+
+t bf6 => { bad-FileTree(
+    5,
+    NodeX::InvalidIndent,
+    q:to/EoD/
+        / d1
+            / d2
+                / d3
+        / d4
+              / d5
+        EoD
+    ,
+) }
+
+# --------------------------------------------------------------------
+my %data;
+
+%data<a1> = {
+    tree-desc => q:to/EoDesc/
+        . f1
+        / foo
+            . bar
+            /700 baz
+          #
+                / dd
+                    .411 fff
+            / ggg
+            . hhh
+        . mlerp
+        EoDesc
+    ,
+    exp => q:to/EoE/
+        . f1
+        / foo
+        . foo/bar
+        / foo/baz 700
+        # a comment
+        / foo/baz/dd
+        . foo/baz/dd/fff 411
+        / foo/ggg
+        . foo/hhh
+        . mlerp
+        EoE
+    ,
+};
+
+# # --------------------------------------------------------------------
+# Not sure what this test is about anymore; revise it some day, maybe.
+#
+# sub confirm-filetree ($tid, $tree-desc, $exp) {
+#     t $tid => {
+#         my $filetree = File::TreeBuilder.new($tree-desc);
+#         my $i = 0;
+#         for $exp.lines -> $test-data {
+#             my ($exp_f-or-d, $exp_path, $exp_perms) = @($test-data ~~ / (\S+) \s+ (\S+) [\s+]? (\S+)? /);
+#             my $node = $filetree.nodes[$i++];
+#             is($node.type, $exp_f-or-d, "F-or-d should match.");
+#             next if $node.type eq '#';
+#             is($node.path, $exp_path, "Path should match.");
+#             $exp_perms && is($node.perms, $exp_perms, "Perms should match.");
+#         }
+#     };
+# }
+#
+# confirm-filetree('ap1', %data<a1><tree-desc>, %data<a1><exp>);
+
+# --------------------------------------------------------------------
+sub confirm-build ($tid, $tree-desc, $exp) {
+    t $tid => sub {
+        my $root = File::Temp::tempdir;
+        build-tree(
+            $root.IO,
+            $tree-desc,
+        );
+        for @$exp.lines -> $expe {
+           # note "<$expe>";
+       # for my $expe (@$exp-nodes) {
+            my ($exp-type, $exp-path, $exp-perms) = $expe.split: /\s+/;
+            if ($exp-type eq '#') {
+                next
+            }
+            elsif ($exp-type eq '/') {
+                ok("$root/$exp-path".IO.d, "Expecting directory '$exp-path'.");
+            }
+            else {
+                ok("$root/$exp-path".IO.f, "Expecting file '$exp-path'.");
+            }
+            if ($exp-perms.defined) {
+                my $got-perms = +"$root/$exp-path".IO.mode.parse-base: 8;
+                is(+"$root/$exp-path".IO.mode, $exp-perms.parse-base(8), "Expecting correct mode.");
+
+            }
+        }
+    };
+}
+
+confirm-build('ab1', %data<a1><tree-desc>, %data<a1><exp>);
+
+# --------------------------------------------------------------------
+done-testing;
+
