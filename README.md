@@ -1,4 +1,4 @@
-[![Actions Status](https://github.com/lucs/File-TreeBuilder.git/actions/workflows/test.yml/badge.svg)](https://github.com/lucs/File-TreeBuilder.git/actions)
+[![Actions Status](https://github.com/lucs/File-TreeBuilder/actions/workflows/test.yml/badge.svg)](https://github.com/lucs/File-TreeBuilder/actions)
 
 NAME
 ====
