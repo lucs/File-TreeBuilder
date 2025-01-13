@@ -50,7 +50,7 @@ unit class File::TreeBuilder:ver<0.1.1>:auth<zef:lucs>;
         f4-key => "File contents from hash.".uc,
     );
 
-    my $parent-dir = '/home/lucs/File-TreeBuilder.demo'.IO;
+    my $parent-dir = '/home/lucs/File-TreeBuilder.demo';
 
     build-tree(
         $parent-dir,
@@ -106,7 +106,7 @@ the function like this:
 
 =begin code
     build-tree(
-        IO::Path $parent-dir,
+        Str $parent-dir,
         Str $tree-desc,
         %file-contents?,
     )
@@ -516,13 +516,13 @@ method !build-nodes (
 
 # --------------------------------------------------------------------
 our sub build-tree (
-    IO::Path $parent-dir,
+    $parent-dir,
     $tree-desc,
     %file-contents?,
 ) is export {
 
-    die "No such directory: '$parent-dir'." unless $parent-dir.d;
-    die "Directory '$parent-dir' is not writable." unless $parent-dir.w;
+    die "No such directory: '$parent-dir'." unless $parent-dir.IO.d;
+    die "Directory '$parent-dir' is not writable." unless $parent-dir.IO.w;
 
     my Node @nodes = File::TreeBuilder!build-nodes: $tree-desc, %file-contents;
 
