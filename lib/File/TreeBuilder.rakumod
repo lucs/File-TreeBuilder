@@ -271,70 +271,67 @@ class Node {...}
     # having removed blank and comment lines and having concatenated
     # continuation lines.
 grammar Node::Grammar {
-    token TOP { <LeadWs> [ <Comment> | <Dir> | <File> ] }
-    token LeadWs { \s* }
-    token Comment { '#' .* }
-    token Dir  { '/' <Perms>? <SpRepr>? \s+ <Name> }
-    token File { '.' <Perms>? <SpRepr>? \s+ <Name> [\s+ <FData>]? }
-    regex FData { [ '.' \s+ <Text> | '%' \s+ <Key> ] }
+    token TOP { <Lead> [ <Dyr> | <Fyl> ] }
+    token Lead { \s* }
+    token Dyr  { '/' <Perm>? <Blnk>? \s+ <Name> }
+    token Fyl  { '.' <Perm>? <Blnk>? \s+ <Name> [\s+ <Data>]? }
+    token Perm { \d\d\d }
+    token Blnk { \S }
     token Name { \S+ }
+    regex Data { [ '.' \s+ <Text> | '%' \s+ <Hkey> ] }
     token Text { .+ }
-    token Key { \w+ }
-    token Perms { \d\d\d }
-
-        # Never was able to make the ⌊<-space +print>⌉ version work.
-   # token SpRepr { <-space +print> }
-    token SpRepr { \w }
+    token Hkey { \S+ }
+   # token Hkey { <[\w'-]>+ }
 }
 
 class Node::Actions {
     has Node $.n is rw;
 
     method TOP ($/) {
-        $!n.lead-ws = $<LeadWs>.made;
+        $!n.lead = $<Lead>.made;
         make $!n;
     }
 
-    method Comment ($/) {
+    method Cmnt ($/) {
         $!n.type = '#';
     }
 
-    method Dir ($M) {
+    method Dyr ($M) {
         $!n.type = '/';
-        $!n.blank = $M<SpRepr>.made;
-        $!n.perms = $M<Perms>.made;
+        $!n.perm = $M<Perm>.made;
+        $!n.blnk = $M<Blnk>.made;
         $!n.name = $M<Name>.made;
 
-        if my $b = $!n.blank {
+        if my $b = $!n.blnk {
             $!n.name ~~ s:g/$b/ /;
         }
     }
 
-    method File ($M) {
+    method Fyl ($M) {
         $!n.type = '.';
-        $!n.blank = $M<SpRepr>.made;
-        $!n.perms = $M<Perms>.made;
+        $!n.perm = $M<Perm>.made;
+        $!n.blnk = $M<Blnk>.made;
         $!n.name = $M<Name>.made;
 
-        if my $b = $!n.blank {
+        if my $b = $!n.blnk {
             $!n.name ~~ s:g/$b/ /;
         }
 
             # Fix tabs, newlines, and backslashes.
-        if my $text = $M<FData><Text>.made {
+        if my $text = $M<Data><Text>.made {
             $text ~~ s:g,'\\t',\t,;
             $text ~~ s:g,'\\n',\n,;
             $text ~~ s:g,'\\',\\,;
             $!n.text = $text;
         }
 
-        if my $key = $M<FData><Key>.made {
-            $!n.key = $key;
+        if my $key = $M<Data><Hkey>.made {
+            $!n.hkey = $key;
         }
 
     }
 
-    method LeadWs ($/) {
+    method Lead ($/) {
         make $/.chars;
     }
 
@@ -342,12 +339,12 @@ class Node::Actions {
         make ~$/;
     }
 
-    method Perms ($/) {
+    method Perm ($/) {
             # Keep it as a string; we want octal.
         make ~$/;
     }
 
-    method SpRepr ($/) {
+    method Blnk ($/) {
         make ~$/;
     }
 
@@ -355,7 +352,7 @@ class Node::Actions {
         make ~$/;
     }
 
-    method Key ($/) {
+    method Hkey ($/) {
         make ~$/;
     }
 
@@ -386,28 +383,28 @@ class Node {
 
         # The original line. Examples:
         #   /600 D-1
-        #   . F_4 % da_key
+        #   . F_4 % some*hash!key
         #   .@ F@2 . Explicit contents.\n
     has Str $.line is rw;
 
         # One of <# / .>.
     has Str $.type is rw = '#';
 
-    has Str $.blank is rw;
+    has Str $.blnk is rw;
 
         # We expect an octal string.
-    has Str $.perms is rw;
+    has Str $.perm is rw;
 
         # ⦃Explicit text.\n⦄ or Nil.
     has Str $.text is rw;
 
-        # ⦃da_key⦄ or Nil.
-    has Str $.key is rw;
+        # ⦃some_hash_key⦄ or Nil.
+    has Str $.hkey is rw;
 
         # Leading whitespace length.
-    has Int $.lead-ws is rw;
+    has Int $.lead is rw;
 
-        # ⦃somefile⦄
+        # ⦃somefile.ext⦄
     has Str $.name is rw;
 
         # Hmm...
@@ -469,7 +466,7 @@ method !build-nodes (
 
         my $swid-level-curr;
 
-        my $swid = $node.lead-ws;
+        my $swid = $node.lead;
         if (%swid-level{$swid}:exists) {
             $swid-level-curr = %swid-level{$swid};
         }
@@ -492,11 +489,11 @@ method !build-nodes (
             }
         }
 
-        if $node.key {
+        if $node.hkey {
             if ! %file-contents.defined {
                 die NodeX::NoFileDataHash.report-here: $node.line, $line-num;
             }
-            if $node.key !~~ %file-contents {
+            if $node.hkey !~~ %file-contents {
                 die NodeX::MissingFileData.report-here: $node.line, $line-num;
             }
         }
@@ -537,16 +534,16 @@ our sub build-tree (
             if $node.text {
                 $f.print: $node.text;
             }
-            elsif $node.key {
-                $f.print: %file-contents{$node.key};
+            elsif $node.hkey {
+                $f.print: %file-contents{$node.hkey};
             }
             $f.close or die "Couldn't close '$path'.";
         }
-        if $node.perms {
+        if $node.perm {
                 # Make sure we consider the perms as octal.
-            my $perms = $node.perms.parse-base: 8;
+            my $perm = $node.perm.parse-base: 8;
                 # Set the perms as required.
-            $path.IO.chmod: $perms;
+            $path.IO.chmod: $perm;
         }
     }
 }
