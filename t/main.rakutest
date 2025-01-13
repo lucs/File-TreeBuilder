@@ -4,50 +4,57 @@ use File::Temp;
 use File::TreeBuilder;
 
 # --------------------------------------------------------------------
-sub bad-Node (Str $text) {
-    my $node;
-    throws-like(
-        { $node = Node.from-text($text) },
-        NodeX::MalformedLine,
-    ) or dd $node;
+sub node-bad ($test-id, Str $text) {
+    t $test-id => {
+        my $node;
+        throws-like(
+            { $node = Node.from-text($text) },
+            NodeX::MalformedLine,
+        ) or dd $node;
+    }
 }
 
-t bd1 => { bad-Node "foo" }
-t bd2 => { bad-Node "." }
-t bd3 => { bad-Node "o foo" }
-t bd4 => { bad-Node ' /xx foo' }
-t bd5 => { bad-Node "/ dir foo" }
-t bd6 => { bad-Node ". file ." }
-t bd7 => { bad-Node "   . file ." }
-t bd8 => { bad-Node ". file x foo" }
+node-bad | « bd1 'foo' »;
+node-bad | « bd2 '.' »;
+node-bad | « bd3 'o foo' »;
+node-bad | « bd4 ' /xx foo' »;
+node-bad | « bd5 '/ dir foo' »;
+node-bad | « bd6 '. file .' »;
+node-bad | « bd7 '   . file .' »;
+node-bad | « bd8 '. file x foo' »;
 
 # --------------------------------------------------------------------
-sub good-Node_desc (
+sub node-good (
+    Str  $test-id,
     Str  $text,
-    Int  $exp_lead-ws,
+    Int  $exp_lead,
     Str  $exp_name,
     Str  $exp_text = '_',
-    Str  $exp_key = '_',
-    Str  $exp_perms = '_',
+    Str  $exp_hkey = '_',
+    Str  $exp_perm = '_',
 ) {
-    my $N = Node.from-text($text);
-    is($N.lead-ws, $exp_lead-ws, "Expecting correct whitespace length '$exp_lead-ws'.");
-    is($N.name, $exp_name, "Expecting correct node name '$exp_name'.");
-    $exp_text ne '_' && is($N.text, $exp_text, "Expecting correct text '$exp_text'.");
-    $exp_key ne '_' && is($N.key, $exp_key, "Expecting correct key '$exp_key'.");
-    $exp_perms ne '_' && is($N.perms, $exp_perms, "Expecting correct perms '$exp_perms'.");
+    t $test-id => {
+        my $N = Node.from-text($text);
+        is($N.lead, $exp_lead, "Expecting lead length '$exp_lead'.");
+        is($N.name, $exp_name, "Expecting node name '$exp_name'.");
+        $exp_text ne '_' && is($N.text, $exp_text, "Expecting text '$exp_text'.");
+        $exp_hkey ne '_' && is($N.hkey, $exp_hkey, "Expecting hkey '$exp_hkey'.");
+        $exp_perm ne '_' && is($N.perm, $exp_perm, "Expecting perm '$exp_perm'.");
+    }
 }
 
-t gd1 => { good-Node_desc | « '  . foo'      2 foo »}
-t gd2 => { good-Node_desc | « '. foo'        0 foo »}
-t gd3 => { good-Node_desc | « '  / foo'      2 foo »}
-t gd4 => { good-Node_desc | « '/o fob'       0 'f b' »}
-t gd5 => { good-Node_desc | « '/ foo'        0 foo »}
-t gd6 => { good-Node_desc | « '. foo . txt'  0 foo   txt »}
-t gd7 => { good-Node_desc | « '. foo % key'  0 foo   _   key »}
-t gd8 => { good-Node_desc | « '.644 foo'     0 foo   _   _   644 »}
-t gd9 => { good-Node_desc | « '.345_ f_b'    0 'f b' _   _   345 »}
-t gdA => { good-Node_desc | « '.222é féb'    0 'f b' _   _   222 »}
+node-good | « gd1 '  . foo'         2 foo »;
+node-good | « gd2 '. foo'           0 foo »;
+node-good | « gd3 '  / foo'         2 foo »;
+node-good | « gd4 '/o fob'          0 'f b' »;
+node-good | « gd5 '/ foo'           0 foo »;
+node-good | « gd6 '. foo . txt'     0 foo   txt »;
+node-good | « gd7 ". foo % a-'key"  0 foo   _   a-\'key »;
+node-good | « gd8 '.644 foo'        0 foo   _   _       644 »;
+node-good | « gd9 '.345_ f_b'       0 'f b' _   _       345 »;
+node-good | « gdA '.222é féb'       0 'f b' _   _       222 »;
+node-good | « gdB '.222< f<b'       0 'f b' _   _       222 »;
+node-good | « gdC ". foo % s!+à"    0 foo   _   s!+à »;
 
 # --------------------------------------------------------------------
 use MONKEY-TYPING;
@@ -111,12 +118,14 @@ t bf5 => { bad-FileTree(
 ) }
 
 t bf6 => { bad-FileTree(
-    5,
+    7,
     NodeX::InvalidIndent,
     q:to/EoD/
         / d1
+          #
             / d2
                 / d3
+
         / d4
               / d5
         EoD
@@ -130,9 +139,11 @@ my %data;
     tree-desc => q:to/EoDesc/
         . f1
         / foo
+
             . bar
+
             /700 baz
-          #
+          # A comment.
                 / dd
                     .411 fff
             / ggg
@@ -144,6 +155,7 @@ my %data;
         . f1
         / foo
         . foo/bar
+        # a blank line
         / foo/baz 700
         # a comment
         / foo/baz/dd
@@ -155,40 +167,19 @@ my %data;
     ,
 };
 
-# # --------------------------------------------------------------------
-# Not sure what this test is about anymore; revise it some day, maybe.
-#
-# sub confirm-filetree ($tid, $tree-desc, $exp) {
-#     t $tid => {
-#         my $filetree = File::TreeBuilder.new($tree-desc);
-#         my $i = 0;
-#         for $exp.lines -> $test-data {
-#             my ($exp_f-or-d, $exp_path, $exp_perms) = @($test-data ~~ / (\S+) \s+ (\S+) [\s+]? (\S+)? /);
-#             my $node = $filetree.nodes[$i++];
-#             is($node.type, $exp_f-or-d, "F-or-d should match.");
-#             next if $node.type eq '#';
-#             is($node.path, $exp_path, "Path should match.");
-#             $exp_perms && is($node.perms, $exp_perms, "Perms should match.");
-#         }
-#     };
-# }
-#
-# confirm-filetree('ap1', %data<a1><tree-desc>, %data<a1><exp>);
-
 # --------------------------------------------------------------------
-sub confirm-build ($tid, $tree-desc, $exp) {
-    t $tid => sub {
-        my $root = File::Temp::tempdir;
+sub confirm-build ($test-id, $tree-desc, $exp) {
+    t $test-id => sub {
+        my $root = tempdir;
         build-tree(
-            $root.IO,
+            $root,
             $tree-desc,
         );
         for @$exp.lines -> $expe {
-           # note "<$expe>";
-       # for my $expe (@$exp-nodes) {
             my ($exp-type, $exp-path, $exp-perms) = $expe.split: /\s+/;
             if ($exp-type eq '#') {
-                next
+                ok(True, "Expecting to skip '$expe'.");
+                next;
             }
             elsif ($exp-type eq '/') {
                 ok("$root/$exp-path".IO.d, "Expecting directory '$exp-path'.");
