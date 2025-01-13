@@ -1,7 +1,9 @@
 Revision history for File-TreeBuilder
 
-0.2.0
+0.2.0 2025-01-12T23:42:23-05:00 
     - Parent directory needs to be just a string now.
+    - Allow %file-contents keys to be any string.
+    - Renamed many identifiers for symmetry.
 
 0.1.1 2023-05-21T18:18:41-04:00
     - Fix broken path in github workflows.
