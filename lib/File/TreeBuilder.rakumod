@@ -11,25 +11,26 @@ unit class File::TreeBuilder:ver<0.1.1>:auth<zef:lucs>;
 =begin code
     use File::TreeBuilder;
 
+        #`{
+            Note that this example heredoc string is literal ('Q'), so
+            no interpolation occurs at all. The program will replace
+            the literal '\n', '\t', '\s' (representing a space), and
+            '\\' by the correct characters.
+
+            Also, empty lines and lines starting with '#'
+            will be discarded and ignored.
+
+            It is invalid for any real tab characters to appear in
+            this string, so indentation must be accomplished with
+            spaces only. And the indentation must be coherent (bad
+            examples are shown later).
+
+            This is an example of an actual tree of files and
+            directories that one might want to build. It has examples
+            of pretty much all the features the program supports,
+            described in detail later.
+        }
     my $tree-desc = Q:to/EoDesc/;
-            # Note that this heredoc string is literal ('Q'), so no
-            # interpolation occurs at all. The program will replace
-            # the literal '\n', '\t', '\s' (representing a space), and
-            # '\\' by the correct characters.
-
-            # Also, empty lines and lines starting with '#'
-            # will be discarded and ignored.
-
-            # It is invalid for any real tab characters to appear in
-            # this string, so indentation must be accomplished with
-            # spaces only. And the indentation must be coherent (bad
-            # examples are shown later).
-
-            # What follows is an example of an actual tree of files
-            # and directories that one might want to build. It has
-            # examples of pretty much all the features the program
-            # supports, described in detail later.
-
         / D1
             . F1
 
@@ -124,12 +125,12 @@ arbitrary file contents, as will be explained below.
 
 =head3 The tree description
 
-Within the C<$tree-desc> string, blank or empty lines are discarded
-and ignored. The string must also not contain any tab characters. The
-first non-blank character of each remaining line must be one of:
+Within the C<$tree-desc> string, blank or empty lines are ignored. The
+string must also not contain any tab characters. The first non-blank
+character of each remaining line must be one of:
 
 =begin code
-    # : Comment line, will be discarded and ignored.
+    # : Comment line, will be ignored.
     / : The line describes a wanted directory.
     . : The line describes a wanted file.
 =end code
