@@ -10,25 +10,26 @@ SYNOPSIS
 
         use File::TreeBuilder;
 
+            #`{
+                Note that this example heredoc string is literal ('Q'), so
+                no interpolation occurs at all. The program will replace
+                the literal '\n', '\t', '\s' (representing a space), and
+                '\\' by the correct characters.
+
+                Also, empty lines and lines starting with '#'
+                will be discarded and ignored.
+
+                It is invalid for any real tab characters to appear in
+                this string, so indentation must be accomplished with
+                spaces only. And the indentation must be coherent (bad
+                examples are shown later).
+
+                This is an example of an actual tree of files and
+                directories that one might want to build. It has examples
+                of pretty much all the features the program supports,
+                described in detail later.
+            }
         my $tree-desc = Q:to/EoDesc/;
-                # Note that this heredoc string is literal ('Q'), so no
-                # interpolation occurs at all. The program will replace
-                # the literal '\n', '\t', '\s' (representing a space), and
-                # '\\' by the correct characters.
-
-                # Also, empty lines and lines starting with '#'
-                # will be discarded and ignored.
-
-                # It is invalid for any real tab characters to appear in
-                # this string, so indentation must be accomplished with
-                # spaces only. And the indentation must be coherent (bad
-                # examples are shown later).
-
-                # What follows is an example of an actual tree of files
-                # and directories that one might want to build. It has
-                # examples of pretty much all the features the program
-                # supports, described in detail later.
-
             / D1
                 . F1
 
@@ -49,7 +50,7 @@ SYNOPSIS
             f4-key => "File contents from hash.".uc,
         );
 
-        my $parent-dir = '/home/lucs/File-TreeBuilder.demo'.IO;
+        my $parent-dir = '/home/lucs/File-TreeBuilder.demo';
 
         build-tree(
             $parent-dir,
@@ -97,7 +98,7 @@ DESCRIPTION
 This module exports the `build-tree` function, used for building and populating simple trees of files and directories. I have found this useful to build test data for programs that need such things. Invoke the function like this:
 
         build-tree(
-            IO::Path $parent-dir,
+            Str $parent-dir,
             Str $tree-desc,
             %file-contents?,
         )
@@ -110,9 +111,9 @@ The optional `%file-contents` argument can be used to specify arbitrary file con
 
 ### The tree description
 
-Within the `$tree-desc` string, blank or empty lines are discarded and ignored. The string must also not contain any tab characters. The first non-blank character of each remaining line must be one of:
+Within the `$tree-desc` string, blank or empty lines are ignored. The string must also not contain any tab characters. The first non-blank character of each remaining line must be one of:
 
-        # : Comment line, will be discarded and ignored.
+        # : Comment line, will be ignored.
         / : The line describes a wanted directory.
         . : The line describes a wanted file.
 
